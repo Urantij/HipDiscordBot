@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TwitchUtils", "..\TwitchUtils\TwitchUtils.csproj", "{E2972DE3-5990-4FE1-B84C-7503F38CFBE1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HipDiscordBot", "HipDiscordBot\HipDiscordBot.csproj", "{65184D5B-2DE2-4973-82D5-29ED4976E81E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E2972DE3-5990-4FE1-B84C-7503F38CFBE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2972DE3-5990-4FE1-B84C-7503F38CFBE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2972DE3-5990-4FE1-B84C-7503F38CFBE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2972DE3-5990-4FE1-B84C-7503F38CFBE1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65184D5B-2DE2-4973-82D5-29ED4976E81E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65184D5B-2DE2-4973-82D5-29ED4976E81E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65184D5B-2DE2-4973-82D5-29ED4976E81E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65184D5B-2DE2-4973-82D5-29ED4976E81E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

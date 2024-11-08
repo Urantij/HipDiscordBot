@@ -4,4 +4,5 @@ public class DiscordConfig
 {
     public required ulong ChannelId { get; set; }
     public required string Token { get; set; }
+    public string? Proxy { get; set; }
 }

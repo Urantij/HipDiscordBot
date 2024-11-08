@@ -1,27 +1,10 @@
+using System.Net;
 using System.Text.Json;
-using DSharpPlus;
-using DSharpPlus.Entities;
-using DSharpPlus.EventArgs;
-using DSharpPlus.Exceptions;
 using HipDiscordBot.Discord;
+using NetCord;
+using NetCord.Rest;
 
 namespace HipDiscordBot.Work;
-
-public class SavedRole(string text, ulong roleId)
-{
-    public string Text { get; set; } = text;
-    public ulong RoleId { get; set; } = roleId;
-}
-
-public class DiscordRoleApplierConfig
-{
-    public ulong? ChannelId { get; set; }
-    public ulong? MessageId { get; set; }
-    public ulong? CreateInteractionId { get; set; }
-    public ulong? CheckRoleInteractionId { get; set; }
-
-    public ICollection<SavedRole>? Roles { get; set; }
-}
 
 public class DiscordRoleApplierWorker : IHostedService
 {
@@ -42,7 +25,7 @@ public class DiscordRoleApplierWorker : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _discordService.DiscordClient.ComponentInteractionCreated += Interacted;
+        _discordService.DiscordClient.InteractionCreate += DiscordClientOnInteractionCreate;
 
         _config = await LoadConfigAsync();
 
@@ -69,65 +52,68 @@ public class DiscordRoleApplierWorker : IHostedService
                 return;
             }
 
-            DiscordChannel channel = await _discordService.DiscordClient.GetChannelAsync(_config.ChannelId.Value);
-
-            await CreateMainCommandMessageAsync(channel);
+            await CreateMainCommandMessageAsync(_config.ChannelId.Value);
+            return;
         }
-        else
+
+        if (_config.ChannelId == null)
         {
-            if (_config.ChannelId == null)
-            {
-                _logger.LogWarning("А канала нет...");
-                await CreateCreationCommand();
-                return;
-            }
+            _logger.LogWarning("А канала нет...");
+            await CreateCreationCommand();
+            return;
+        }
 
-            DiscordChannel channel = await _discordService.DiscordClient.GetChannelAsync(_config.ChannelId.Value);
+        try
+        {
+            // Вот бы документацию, какая ошибка, если сообщения нет
+            await _discordService.DiscordClient.Rest.GetMessageAsync(_config.ChannelId.Value,
+                _config.MessageId.Value, cancellationToken: cancellationToken);
+        }
+        catch (RestException restException) when (restException.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogWarning("Сообщение не найдено, создаём...");
 
-            try
-            {
-                await channel.GetMessageAsync(_config.MessageId.Value);
-            }
-            catch (NotFoundException e)
-            {
-                _logger.LogWarning("Сообщение не найдено, создаём...");
-
-                await CreateMainCommandMessageAsync(channel);
-            }
+            await CreateMainCommandMessageAsync(_config.ChannelId.Value);
         }
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _discordService.DiscordClient.ComponentInteractionCreated -= Interacted;
+        _discordService.DiscordClient.InteractionCreate -= DiscordClientOnInteractionCreate;
 
         return Task.CompletedTask;
     }
 
-    private async Task Interacted(DiscordClient client, ComponentInteractionCreateEventArgs args)
+    private async ValueTask DiscordClientOnInteractionCreate(Interaction interaction)
     {
         if (_config == null)
             return;
 
-        DiscordInteraction interaction = args.Interaction;
-
         try
         {
-            if (interaction.Data.Id == _config.CheckRoleInteractionId)
+            if (interaction is SlashCommandInteraction slash)
             {
-                await HandleRoleCheckCommandAsync(interaction);
-            }
-            else if (interaction.Data.Id == _config.CreateInteractionId)
-            {
-                _logger.LogInformation("Создаём основную команду...");
+                if (slash.Data.Id == _config.CheckRoleInteractionId)
+                {
+                    await HandleRoleCheckCommandAsync(slash);
+                }
+                else if (slash.Data.Id == _config.CreateInteractionId)
+                {
+                    _logger.LogInformation("Создаём основную команду...");
 
-                await HandleCreateCommandAsync(interaction);
+                    await HandleCreateCommandAsync(slash);
+                }
             }
-            else if (args.Message.Id == _config.MessageId && interaction.Data.CustomId.StartsWith(_mainCommandCustomId))
-            {
-                _logger.LogDebug("Работаем с командой role...");
 
-                await HandleRoleButtonAsync(interaction);
+            if (interaction is ButtonInteraction button)
+            {
+                if (button.Message.Id == _config.MessageId &&
+                    button.Data.CustomId.StartsWith(_mainCommandCustomId))
+                {
+                    _logger.LogDebug("Работаем с командой role...");
+
+                    await HandleRoleButtonAsync(button);
+                }
             }
         }
         catch (Exception e)
@@ -136,7 +122,7 @@ public class DiscordRoleApplierWorker : IHostedService
         }
     }
 
-    private async Task HandleRoleCheckCommandAsync(DiscordInteraction discordInteraction)
+    private async Task HandleRoleCheckCommandAsync(SlashCommandInteraction discordInteraction)
     {
         if (_config == null)
         {
@@ -146,19 +132,23 @@ public class DiscordRoleApplierWorker : IHostedService
 
         if (!discordInteraction.Data.Options.Any())
         {
-            await discordInteraction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent("И че?").AsEphemeral());
+            await discordInteraction.SendResponseAsync(InteractionCallback.Message(new InteractionMessageProperties()
+                .WithContent("И че?")
+                .WithFlags(MessageFlags.Ephemeral)));
             return;
         }
 
-        if (discordInteraction.Data.Options.First().Value is not ulong roleId)
+        if (discordInteraction.Data.Options[0].Type != ApplicationCommandOptionType.Role)
         {
-            await discordInteraction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent("клево ты придумал").AsEphemeral());
+            await discordInteraction.SendResponseAsync(InteractionCallback.Message(new InteractionMessageProperties()
+                .WithContent("клево ты придумал")
+                .WithFlags(MessageFlags.Ephemeral)));
             return;
         }
 
-        string? text = discordInteraction.Data.Options.ElementAtOrDefault(1)?.Value as string;
+        ulong roleId = ulong.Parse(discordInteraction.Data.Options[0].Value);
+
+        string? text = discordInteraction.Data.Options.ElementAtOrDefault(1)?.Value;
 
         SavedRole? existingRole = _config.Roles?.FirstOrDefault(r => r.RoleId == roleId);
         if (existingRole != null)
@@ -171,8 +161,10 @@ public class DiscordRoleApplierWorker : IHostedService
         {
             if (text == null)
             {
-                await discordInteraction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder().WithContent("а текст кто писать будет").AsEphemeral());
+                await discordInteraction.SendResponseAsync(InteractionCallback.Message(
+                    new InteractionMessageProperties()
+                        .WithContent("а текст кто писать будет")
+                        .WithFlags(MessageFlags.Ephemeral)));
                 return;
             }
 
@@ -183,16 +175,15 @@ public class DiscordRoleApplierWorker : IHostedService
             _config.Roles.Add(new SavedRole(text, roleId));
         }
 
-        await discordInteraction.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder().AsEphemeral());
+        await discordInteraction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
 
         await SaveConfigAsync();
         await UpdateMainCommandMessageAsync();
 
-        await discordInteraction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent("Сделана!"));
+        await discordInteraction.ModifyResponseAsync(o => o.WithContent("Сделана!"));
     }
 
-    private async Task HandleCreateCommandAsync(DiscordInteraction discordInteraction)
+    private async Task HandleCreateCommandAsync(SlashCommandInteraction discordInteraction)
     {
         if (_config == null)
         {
@@ -200,34 +191,31 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        await discordInteraction.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder().AsEphemeral());
+        await discordInteraction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
 
-        await _discordService.DiscordClient.DeleteGlobalApplicationCommandAsync(_config.CreateInteractionId
-            .Value);
+        await _discordService.DiscordClient.Rest.DeleteGlobalApplicationCommandAsync(0,
+            _config.CreateInteractionId.Value);
         _config.CreateInteractionId = null;
-
-        DiscordChannel channel = await _discordService.DiscordClient.GetChannelAsync(discordInteraction.ChannelId);
 
         try
         {
-            await CreateMainCommandMessageAsync(channel, saveChanges: false);
+            await CreateMainCommandMessageAsync(discordInteraction.Channel.Id, saveChanges: false);
         }
         catch (Exception e)
         {
             _logger.LogError(e, "Не удалось создание сообщение...");
 
-            _config.ChannelId = discordInteraction.ChannelId;
+            _config.ChannelId = discordInteraction.Channel.Id;
             await SaveConfigAsync();
             return;
         }
 
         await SaveConfigAsync();
 
-        await discordInteraction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent("Сделана!"));
+        await discordInteraction.ModifyResponseAsync(o => o.WithContent("Сделана!"));
     }
 
-    private async Task HandleRoleButtonAsync(DiscordInteraction discordInteraction)
+    private async Task HandleRoleButtonAsync(ButtonInteraction discordInteraction)
     {
         if (_config == null)
         {
@@ -235,14 +223,13 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        await discordInteraction.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder().AsEphemeral());
+        await discordInteraction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
 
         if (!int.TryParse(discordInteraction.Data.CustomId[_mainCommandCustomId.Length..], out int index))
         {
             _logger.LogError("Кривой customid {id}", discordInteraction.Data.CustomId);
 
-            await discordInteraction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent("пошёл нахуй"));
+            await discordInteraction.ModifyResponseAsync(o => o.WithContent("пошёл нахуй"));
             return;
         }
 
@@ -252,43 +239,49 @@ public class DiscordRoleApplierWorker : IHostedService
         {
             _logger.LogError("Кривой индекс {id}", index);
 
-            await discordInteraction.EditOriginalResponseAsync(
-                new DiscordWebhookBuilder().WithContent("сори братик всё сломано"));
+            await discordInteraction.ModifyResponseAsync(o => o.WithContent("сори братик всё сломано"));
             return;
         }
 
-        DiscordRole? role = discordInteraction.Guild?.GetRole(saveRole.RoleId);
+        Role? role = null;
+        if (discordInteraction.Guild != null)
+            role = await discordInteraction.Guild.GetRoleAsync(saveRole.RoleId);
+
         if (role is null)
         {
             _logger.LogWarning("Роль не найдена.");
 
-            await discordInteraction.EditOriginalResponseAsync(
-                new DiscordWebhookBuilder().WithContent("сори братик всё сломано"));
+            await discordInteraction.ModifyResponseAsync(o => o.WithContent("сори братик всё сломано"));
             return;
         }
 
-        if (discordInteraction.User is not DiscordMember member)
+        // мне пришлось запускать приложение и через дебаг смотреть что за тип типочек тут лежит.
+        // документацию бы..
+        if (discordInteraction.User is not GuildInteractionUser member)
         {
             _logger.LogDebug("Не нашли мембера...");
-
-            await discordInteraction.EditOriginalResponseAsync(
-                new DiscordWebhookBuilder().WithContent("сори братик всё сломано"));
-            member = await discordInteraction.Guild.GetMemberAsync(discordInteraction.User.Id);
+            await discordInteraction.ModifyResponseAsync(o => o.WithContent("сори братик всё сломано"));
+            return;
         }
 
-        bool exist = member.Roles.Any(r => r.Id == role.Id);
+        bool exist = member.RoleIds.Any(r => r == role.Id);
 
         if (exist)
         {
-            await member.RevokeRoleAsync(role, "Попросил!");
+            await member.RemoveRoleAsync(role.Id, new RestRequestProperties()
+            {
+                AuditLogReason = "Попросил!"
+            });
         }
         else
         {
-            await member.GrantRoleAsync(role, "Попросил!");
+            await member.AddRoleAsync(role.Id, new RestRequestProperties()
+            {
+                AuditLogReason = "Попросил!"
+            });
         }
 
-        await discordInteraction.EditOriginalResponseAsync(
-            new DiscordWebhookBuilder().WithContent("Всё сделано в лучшем виде, приходите ещё."));
+        await discordInteraction.ModifyResponseAsync(o => o.WithContent("Всё сделано в лучшем виде, приходите ещё."));
     }
 
     private async Task UpdateMainCommandMessageAsync()
@@ -307,17 +300,14 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        DiscordChannel channel = await _discordService.DiscordClient.GetChannelAsync(_config.ChannelId.Value);
-        DiscordMessage message = await channel.GetMessageAsync(_config.MessageId.Value);
-
         // ЭЭ, пачему то не работает. BadRequest
         // await message.ModifyAsync(b => MakeMainCommandMessage(b, _config.Roles ?? []));
 
-        await message.DeleteAsync();
-        await CreateMainCommandMessageAsync(channel);
+        await _discordService.DiscordClient.Rest.DeleteMessageAsync(_config.ChannelId.Value, _config.MessageId.Value);
+        await CreateMainCommandMessageAsync(_config.ChannelId.Value);
     }
 
-    private async Task CreateMainCommandMessageAsync(DiscordChannel channel, bool saveChanges = true)
+    private async Task CreateMainCommandMessageAsync(ulong channelId, bool saveChanges = true)
     {
         _logger.LogInformation("Создаём основное сообщение...");
 
@@ -327,10 +317,11 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        DiscordMessage message;
+        RestMessage message;
         try
         {
-            message = await channel.SendMessageAsync(b => MakeMainCommandMessage(b, _config.Roles ?? []));
+            message = await _discordService.DiscordClient.Rest.SendMessageAsync(channelId,
+                MakeMainCommandMessage(_config.Roles ?? []));
         }
         catch (Exception e)
         {
@@ -338,7 +329,7 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        _config.ChannelId = channel.Id;
+        _config.ChannelId = channelId;
         _config.MessageId = message.Id;
 
         if (saveChanges)
@@ -347,15 +338,30 @@ public class DiscordRoleApplierWorker : IHostedService
         }
     }
 
-    private static void MakeMainCommandMessage(DiscordMessageBuilder b, ICollection<SavedRole> roles)
+    // Создаёт параметры сообщения с кнопками
+    private static MessageProperties MakeMainCommandMessage(ICollection<SavedRole> roles)
     {
-        b.WithContent("кто нажал тот сдохнет");
+        MessageProperties properties = new();
+
+        properties.WithContent("кто нажал тот сдохнет");
 
         if (roles.Count > 0)
         {
-            b.AddComponents(roles.Select((role, i) => new DiscordButtonComponent(ButtonStyle.Primary,
-                _mainCommandCustomId + i.ToString(), $"хочу знать когда {role.Text}") as DiscordComponent).ToArray());
+            properties.AddComponents(new MessageComponentProperties[]
+            {
+                new ActionRowProperties(roles.Select(MakeComponent).ToArray())
+            });
         }
+
+        return properties;
+    }
+
+    private static ButtonProperties MakeComponent(SavedRole role, int index)
+    {
+        return new ButtonProperties(
+            customId: _mainCommandCustomId + index.ToString(),
+            label: $"хочу знать когда {role.Text}",
+            style: ButtonStyle.Primary);
     }
 
     private async Task CreateRoleSelectCommandAsync(bool saveChanges = true)
@@ -368,12 +374,26 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        DiscordApplicationCommand interaction = await _discordService.DiscordClient.CreateGlobalApplicationCommandAsync(
-            new DiscordApplicationCommand(
-                "roling", "чек роли", defaultMemberPermissions: Permissions.Administrator, options:
-                [
-                    new DiscordApplicationCommandOption("role", "роль", ApplicationCommandOptionType.Role),
-                    new DiscordApplicationCommandOption("text", "залупа", ApplicationCommandOptionType.String)
+        if (_discordService.App == null)
+        {
+            _logger.LogWarning("Попытка создать команду роли без апп.");
+            return;
+        }
+
+        // ну и как мне опции засунуть?
+        // ApplicationCommandService<SlashCommandContext> applicationCommandService = new();
+        // applicationCommandService.AddSlashCommand("roling", "чек роли", () =>
+        // {
+        //     
+        // }, Permissions.Administrator);
+
+        ApplicationCommand interaction = await _discordService.DiscordClient.Rest.CreateGlobalApplicationCommandAsync(
+            _discordService.App.Id,
+            new SlashCommandProperties("roling", "чек роли")
+                .WithDefaultGuildUserPermissions(Permissions.Administrator)
+                .WithOptions([
+                    new ApplicationCommandOptionProperties(ApplicationCommandOptionType.Role, "role", "роль"),
+                    new ApplicationCommandOptionProperties(ApplicationCommandOptionType.String, "text", "залупа")
                 ]));
 
         _config.CheckRoleInteractionId = interaction.Id;
@@ -394,10 +414,16 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        DiscordApplicationCommand created =
-            await _discordService.DiscordClient.CreateGlobalApplicationCommandAsync(
-                new DiscordApplicationCommand(
-                    "here", "насри тут, дружище", defaultMemberPermissions: Permissions.Administrator));
+        if (_discordService.App == null)
+        {
+            _logger.LogWarning("Попытка создать создание без апп.");
+            return;
+        }
+
+        ApplicationCommand created = await _discordService.DiscordClient.Rest.CreateGlobalApplicationCommandAsync(
+            _discordService.App.Id,
+            new SlashCommandProperties("here", "насри тут, дружище")
+                .WithDefaultGuildUserPermissions(Permissions.Administrator));
 
         _config.CreateInteractionId = created.Id;
 

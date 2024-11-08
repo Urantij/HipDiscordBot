@@ -1,41 +1,74 @@
-using DSharpPlus;
-using DSharpPlus.Entities;
-using DSharpPlus.EventArgs;
+using System.Net;
+using HipDiscordBot.Work;
 using Microsoft.Extensions.Options;
+using NetCord;
+using NetCord.Gateway;
+using NetCord.Gateway.WebSockets;
+using NetCord.Rest;
 
 namespace HipDiscordBot.Discord;
 
 public class DiscordService : IHostedService
 {
-    public DiscordClient DiscordClient { get; }
+    public GatewayClient DiscordClient { get; }
     private readonly ulong _channelId;
 
-    public DiscordService(IOptions<DiscordConfig> config)
+    public CurrentApplication? App { get; private set; }
+
+    public DiscordService(IOptions<DiscordConfig> config, ILogger<DiscordService> logger)
     {
         _channelId = config.Value.ChannelId;
 
-        DiscordClient = new DiscordClient(new DiscordConfiguration()
+        WebProxy? proxy = null;
+        if (config.Value.Proxy != null)
         {
-            Token = config.Value.Token,
-            TokenType = TokenType.Bot,
-            Intents = DiscordIntents.AllUnprivileged | DiscordIntents.GuildIntegrations
+            logger.LogInformation("Юзаем прокси");
+            proxy = new WebProxy(config.Value.Proxy);
+        }
+
+        RestClientConfiguration? restClientConfiguration = null;
+        if (proxy != null)
+        {
+            restClientConfiguration = new RestClientConfiguration()
+            {
+                RequestHandler = new RestRequestHandler(new HttpClientHandler()
+                {
+                    Proxy = proxy
+                })
+            };
+        }
+
+        IWebSocketConnectionProvider? webSocketConnectionProvider = null;
+        if (proxy != null)
+        {
+            webSocketConnectionProvider = new MyWebSocketConnectionProvider(proxy);
+        }
+
+        DiscordClient = new GatewayClient(new BotToken(config.Value.Token), new GatewayClientConfiguration()
+        {
+            RestClientConfiguration = restClientConfiguration,
+            WebSocketConnectionProvider = webSocketConnectionProvider,
+            Intents = GatewayIntents.AllNonPrivileged | GatewayIntents.GuildIntegrations
         });
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        return DiscordClient.ConnectAsync();
+        await DiscordClient.StartAsync(cancellationToken: cancellationToken);
+
+        App = await DiscordClient.Rest.GetCurrentApplicationAsync(cancellationToken: cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        return DiscordClient.DisconnectAsync();
+        return DiscordClient.CloseAsync(cancellationToken: cancellationToken);
     }
 
-    public async Task SendMessageAsync(string text)
+    public Task SendMessageAsync(string text)
     {
-        DiscordChannel channel = await DiscordClient.GetChannelAsync(_channelId);
-
-        await channel.SendMessageAsync(text);
+        return DiscordClient.Rest.SendMessageAsync(_channelId, new MessageProperties()
+        {
+            Content = text
+        });
     }
 }

@@ -1,3 +1,4 @@
 [submodule "TwitchUtils"]
 	path = TwitchUtils
 	url = https://github.com/Urantij/TwitchUtils
+	branch = sg

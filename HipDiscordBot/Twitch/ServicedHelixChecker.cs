@@ -6,16 +6,15 @@ namespace HipDiscordBot.Twitch;
 
 public class ServicedHelixChecker : HelixChecker, IHostedService
 {
-    public ServicedHelixChecker(IOptions<TwitchStatuserConfig> options,
-        ILoggerFactory? loggerFactory = null,
-        CancellationToken cancellationToken = default) : base(options.Value, loggerFactory, cancellationToken)
+    public ServicedHelixChecker(IOptions<TwitchStatuserConfig> options, IHostApplicationLifetime lifetime,
+        ILoggerFactory loggerFactory) : base(options.Value, loggerFactory, lifetime.ApplicationStopping)
     {
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         Start();
-        
+
         return Task.CompletedTask;
     }
 

@@ -12,42 +12,36 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        // https://github.com/dotnet/runtime/issues/95006
+
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
         builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
-        builder.Services.AddOptions<DiscordConfig>()
-            .BindConfiguration("Discord")
-            .ValidateOnStart();
-        builder.Services.AddHostedSingleton<DiscordService>();
-
-        builder.Services.AddOptions<TwitchStatuserConfig>()
-            .BindConfiguration("Twitch")
-            // .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        builder.Services.AddHostedSingleton<ServicedPubsubChecker, ITwitchChecker>();
-
-        if (builder.Configuration.GetSection("Twitch").GetSection("Helix").Exists())
         {
-            System.Console.WriteLine("хеликс");
+            CancerConfigLoader bind = CancerConfigLoader.Load();
 
-            builder.Services.AddOptions<HelixConfig>()
-                .BindConfiguration("Twitch/Helix")
-                // .ValidateDataAnnotations()
-                .ValidateOnStart();
+            builder.Services.AddCancerOptions<DiscordConfig>("Discord", bind);
+            builder.Services.AddHostedSingleton<DiscordService>();
 
-            builder.Services.AddHostedSingleton<ServicedHelixChecker, ITwitchChecker>();
+            builder.Services.AddCancerOptions<TwitchStatuserConfig>("Twitch", bind);
+            builder.Services.AddHostedSingleton<ServicedPubsubChecker, ITwitchChecker>();
+
+            if (bind.TryLoadConfig<HelixConfig>("Twitch/Helix", out HelixConfig? helixConfig))
+            {
+                System.Console.WriteLine("хеликс");
+
+                builder.Services.AddCancerOptions<HelixConfig>(helixConfig);
+                builder.Services.AddHostedSingleton<ServicedHelixChecker, ITwitchChecker>();
+            }
+
+            builder.Services.AddSingleton<ServicedStatuser>();
+
+            builder.Services.AddCancerOptions<StreamAnnounceConfig>("Announce", bind);
+            builder.Services.AddHostedSingleton<StreamAnnounceWorker>();
+
+            builder.Services.AddHostedSingleton<DiscordRoleApplierWorker>();
         }
-
-        builder.Services.AddSingleton<TwitchStatuser>();
-
-        builder.Services.AddOptions<StreamAnnounceConfig>()
-            .BindConfiguration("Announce")
-            .ValidateOnStart();
-        builder.Services.AddHostedSingleton<StreamAnnounceWorker>();
-
-        builder.Services.AddHostedSingleton<DiscordRoleApplierWorker>();
 
         IHost host = builder.Build();
         host.Run();

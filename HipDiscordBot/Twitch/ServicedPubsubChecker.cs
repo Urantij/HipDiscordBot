@@ -6,9 +6,8 @@ namespace HipDiscordBot.Twitch;
 
 public class ServicedPubsubChecker : PubsubChecker, IHostedService
 {
-    public ServicedPubsubChecker(IOptions<TwitchStatuserConfig> options,
-        ILoggerFactory? loggerFactory = null,
-        CancellationToken cancellationToken = default) : base(options.Value, loggerFactory, cancellationToken)
+    public ServicedPubsubChecker(IOptions<TwitchStatuserConfig> options, IHostApplicationLifetime lifetime,
+        ILoggerFactory loggerFactory) : base(options.Value, loggerFactory, lifetime.ApplicationStopping)
     {
     }
 

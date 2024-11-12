@@ -1,16 +1,24 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HipDiscordBot.Discord;
+using HipDiscordBot.Utilities;
 using NetCord;
 using NetCord.Rest;
 
 namespace HipDiscordBot.Work;
 
+[JsonSerializable(typeof(DiscordRoleApplierConfig))]
+public partial class DiscordRoleApplierConfigSerializerContext : JsonSerializerContext
+{
+}
+
 public class DiscordRoleApplierWorker : IHostedService
 {
-    private const string _persistStoragePath = "DiscordRoleApplierWorker.json";
+    private const string PersistStoragePath = "DiscordRoleApplierWorker.json";
 
-    private const string _mainCommandCustomId = "roleinteraction";
+    private const string MainCommandCustomId = "roleinteraction";
 
     private readonly DiscordService _discordService;
     private readonly ILogger<DiscordRoleApplierWorker> _logger;
@@ -108,7 +116,7 @@ public class DiscordRoleApplierWorker : IHostedService
             if (interaction is ButtonInteraction button)
             {
                 if (button.Message.Id == _config.MessageId &&
-                    button.Data.CustomId.StartsWith(_mainCommandCustomId))
+                    button.Data.CustomId.StartsWith(MainCommandCustomId))
                 {
                     _logger.LogDebug("Работаем с командой role...");
 
@@ -146,7 +154,18 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
-        ulong roleId = ulong.Parse(discordInteraction.Data.Options[0].Value);
+        if (discordInteraction.Data.Options[0].Value is null)
+        {
+            _logger.LogError("дискорд капитально сломался");
+
+            await discordInteraction.SendResponseAsync(InteractionCallback.Message(new InteractionMessageProperties()
+                .WithContent("дискорд капитально сломался")
+                .WithFlags(MessageFlags.Ephemeral)));
+            return;
+        }
+
+        // TODO я не понимаю, почему он требует !
+        ulong roleId = ulong.Parse(discordInteraction.Data.Options[0].Value!);
 
         string? text = discordInteraction.Data.Options.ElementAtOrDefault(1)?.Value;
 
@@ -191,6 +210,12 @@ public class DiscordRoleApplierWorker : IHostedService
             return;
         }
 
+        if (_config.CreateInteractionId == null)
+        {
+            _logger.LogWarning($"{nameof(HandleCreateCommandAsync)} {nameof(_config.CreateInteractionId)} нул");
+            return;
+        }
+
         await discordInteraction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
 
         await _discordService.DiscordClient.Rest.DeleteGlobalApplicationCommandAsync(0,
@@ -225,7 +250,7 @@ public class DiscordRoleApplierWorker : IHostedService
 
         await discordInteraction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
 
-        if (!int.TryParse(discordInteraction.Data.CustomId[_mainCommandCustomId.Length..], out int index))
+        if (!int.TryParse(discordInteraction.Data.CustomId[MainCommandCustomId.Length..], out int index))
         {
             _logger.LogError("Кривой customid {id}", discordInteraction.Data.CustomId);
 
@@ -359,7 +384,7 @@ public class DiscordRoleApplierWorker : IHostedService
     private static ButtonProperties MakeComponent(SavedRole role, int index)
     {
         return new ButtonProperties(
-            customId: _mainCommandCustomId + index.ToString(),
+            customId: MainCommandCustomId + index.ToString(),
             label: $"хочу знать когда {role.Text}",
             style: ButtonStyle.Primary);
     }
@@ -435,18 +460,26 @@ public class DiscordRoleApplierWorker : IHostedService
 
     private async Task<DiscordRoleApplierConfig> LoadConfigAsync()
     {
-        if (File.Exists(_persistStoragePath))
-            return JsonSerializer.Deserialize<DiscordRoleApplierConfig>(
-                await File.ReadAllTextAsync(_persistStoragePath));
+        if (File.Exists(PersistStoragePath))
+            return JsonSerializerExtensions.Deserialize<DiscordRoleApplierConfig>(
+                await File.ReadAllTextAsync(PersistStoragePath),
+                DiscordRoleApplierConfigSerializerContext.Default);
 
         return new DiscordRoleApplierConfig();
     }
 
+    [UnconditionalSuppressMessage("Trimming",
+        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+        Justification = "ну там стоит контект в опции")]
+    [UnconditionalSuppressMessage("AOT",
+        "IL3050:Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.",
+        Justification = "ну там стоит контект в опции")]
     private Task SaveConfigAsync()
     {
-        return File.WriteAllTextAsync(_persistStoragePath, JsonSerializer.Serialize(_config, new JsonSerializerOptions()
+        return File.WriteAllTextAsync(PersistStoragePath, JsonSerializer.Serialize(_config, new JsonSerializerOptions()
         {
-            WriteIndented = true
+            WriteIndented = true,
+            TypeInfoResolver = DiscordRoleApplierConfigSerializerContext.Default
         }));
     }
 }

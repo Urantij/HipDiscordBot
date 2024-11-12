@@ -1,8 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace HipDiscordBot.Discord;
 
 public class DiscordConfig
 {
-    public required ulong ChannelId { get; set; }
-    public required string Token { get; set; }
+    [Required] public required ulong ChannelId { get; set; }
+    [Required] public required string Token { get; set; }
     public string? Proxy { get; set; }
 }

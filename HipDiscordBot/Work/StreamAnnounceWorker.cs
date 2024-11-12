@@ -1,5 +1,4 @@
 using HipDiscordBot.Discord;
-using HipDiscordBot.Twitch;
 using Microsoft.Extensions.Options;
 using TwitchUtils;
 using TwitchUtils.Checkers;

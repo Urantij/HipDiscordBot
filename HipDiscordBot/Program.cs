@@ -36,6 +36,7 @@ public class Program
             }
 
             builder.Services.AddSingleton<ServicedStatuser>();
+            builder.Services.AddSingleton<TwitchStatuser>(sp => sp.GetRequiredService<ServicedStatuser>());
 
             builder.Services.AddCancerOptions<StreamAnnounceConfig>("Announce", bind);
             builder.Services.AddHostedSingleton<StreamAnnounceWorker>();

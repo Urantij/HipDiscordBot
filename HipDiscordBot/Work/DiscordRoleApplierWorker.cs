@@ -372,10 +372,7 @@ public class DiscordRoleApplierWorker : IHostedService
 
         if (roles.Count > 0)
         {
-            properties.AddComponents(new MessageComponentProperties[]
-            {
-                new ActionRowProperties(roles.Select(MakeComponent).ToArray())
-            });
+            properties.AddComponents(new ActionRowProperties(roles.Select(MakeComponent).ToArray()));
         }
 
         return properties;

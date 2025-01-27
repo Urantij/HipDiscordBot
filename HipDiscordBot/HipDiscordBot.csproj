@@ -11,6 +11,7 @@
 <!--        <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>-->
         <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
         <PublishAot>true</PublishAot>
+        <OptimizationPreference>Size</OptimizationPreference>
     </PropertyGroup>
 
 <!--    <PropertyGroup>-->

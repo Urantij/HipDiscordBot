@@ -457,26 +457,12 @@ public class DiscordRoleApplierWorker : IHostedService
 
     private async Task<DiscordRoleApplierConfig> LoadConfigAsync()
     {
-        if (File.Exists(PersistStoragePath))
-            return JsonSerializerExtensions.Deserialize<DiscordRoleApplierConfig>(
-                await File.ReadAllTextAsync(PersistStoragePath),
-                DiscordRoleApplierConfigSerializerContext.Default);
-
-        return new DiscordRoleApplierConfig();
+        return await MyConfig.LoadConfigAsync<DiscordRoleApplierConfig>(PersistStoragePath, DiscordRoleApplierConfigSerializerContext.Default) ??
+               new DiscordRoleApplierConfig();
     }
 
-    [UnconditionalSuppressMessage("Trimming",
-        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
-        Justification = "ну там стоит контект в опции")]
-    [UnconditionalSuppressMessage("AOT",
-        "IL3050:Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.",
-        Justification = "ну там стоит контект в опции")]
     private Task SaveConfigAsync()
     {
-        return File.WriteAllTextAsync(PersistStoragePath, JsonSerializer.Serialize(_config, new JsonSerializerOptions()
-        {
-            WriteIndented = true,
-            TypeInfoResolver = DiscordRoleApplierConfigSerializerContext.Default
-        }));
+        return MyConfig.SaveConfigAsync(PersistStoragePath, _config, DiscordRoleApplierConfigSerializerContext.Default);
     }
 }

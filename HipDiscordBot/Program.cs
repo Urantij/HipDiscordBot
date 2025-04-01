@@ -2,6 +2,7 @@ using HipDiscordBot.Discord;
 using HipDiscordBot.Twitch;
 using HipDiscordBot.Utilities;
 using HipDiscordBot.Work;
+using HipDiscordBot.Work.Bingo;
 using TwitchUtils;
 using TwitchUtils.Checkers;
 using TwitchUtils.Checkers.Helix;
@@ -42,6 +43,7 @@ public class Program
             builder.Services.AddHostedSingleton<StreamAnnounceWorker>();
 
             builder.Services.AddHostedSingleton<DiscordRoleApplierWorker>();
+            builder.Services.AddHostedSingleton<BingoWorker>();
         }
 
         IHost host = builder.Build();

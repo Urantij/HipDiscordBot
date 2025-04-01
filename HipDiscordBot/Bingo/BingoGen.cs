@@ -19,10 +19,11 @@ public class BingoGen
     /// 
     /// </summary>
     /// <param name="side"></param>
+    /// <param name="seed"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="OperationCanceledException">Если таска была отменена.</exception>
-    public static async Task<MemoryStream?> GenAsync(int side, CancellationToken cancellationToken)
+    public static async Task<MemoryStream?> GenAsync(int side, int seed, CancellationToken cancellationToken)
     {
         // Странно, что эта синхронная проверка тут, а остальные там.
         if (!Directory.Exists(FolderPath))
@@ -49,7 +50,7 @@ public class BingoGen
         {
             await tsc.Task.WaitAsync(cancellationToken);
 
-            return await GenImageAsync(side, cancellationToken);
+            return await GenImageAsync(side, seed, cancellationToken);
         }
         finally
         {
@@ -67,7 +68,7 @@ public class BingoGen
         }
     }
 
-    private static async Task<MemoryStream?> GenImageAsync(int side, CancellationToken cancellationToken)
+    private static async Task<MemoryStream?> GenImageAsync(int side, int seed, CancellationToken cancellationToken)
     {
         List<string> allFiles = Directory.GetFiles(FolderPath).ToList();
 
@@ -85,7 +86,9 @@ public class BingoGen
 
         for (int i = 0; i < side * side; i++)
         {
-            int next = Random.Shared.Next(0, allFiles.Count);
+            Random random = new(seed);
+
+            int next = random.Next(0, allFiles.Count);
             string file = allFiles[next];
             allFiles.RemoveAt(next);
 

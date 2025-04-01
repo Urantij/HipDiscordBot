@@ -9,14 +9,12 @@ public class BingoWorker : IHostedService
 {
     private const string PersistStoragePath = "BingoWorker.json";
 
-    private const string buttonCommandId = "bingo";
+    private const string ButtonCommandId = "bingo";
 
     private readonly DiscordService _discordService;
     private readonly ILogger _logger;
 
     private BingoConfig? _config;
-
-    private readonly Lock _lock = new();
 
     public BingoWorker(DiscordService discordService, ILogger<BingoWorker> logger)
     {
@@ -110,7 +108,7 @@ public class BingoWorker : IHostedService
             if (interaction is ButtonInteraction button)
             {
                 if (button.Message.Id == _config.MessageId &&
-                    button.Data.CustomId.StartsWith(buttonCommandId))
+                    button.Data.CustomId.StartsWith(ButtonCommandId))
                 {
                     _logger.LogDebug("Работаем с командой бынго");
 
@@ -136,7 +134,9 @@ public class BingoWorker : IHostedService
         {
             CancellationTokenSource cts = new(TimeSpan.FromSeconds(5));
 
-            content = await BingoGen.GenAsync(_config.Sides, cts.Token);
+            int seed = MakeSeed(button.Id);
+
+            content = await BingoGen.GenAsync(_config.Sides, seed, cts.Token);
         }
 
         if (content == null)
@@ -203,6 +203,17 @@ public class BingoWorker : IHostedService
                 .WithFlags(MessageFlags.Ephemeral)));
     }
 
+    private static int MakeSeed(ulong accountId)
+    {
+        int seed = (int)accountId;
+
+        DateTime now = DateTime.UtcNow;
+
+        seed += now.Year + now.Month + now.Day;
+
+        return seed;
+    }
+
     private static MessageProperties MakeMainCommandMessage()
     {
         MessageProperties properties = new();
@@ -211,7 +222,7 @@ public class BingoWorker : IHostedService
 
         properties.AddComponents(new ActionRowProperties([
             new ButtonProperties(
-                customId: buttonCommandId,
+                customId: ButtonCommandId,
                 label: $"хочу бинго",
                 style: ButtonStyle.Primary)
         ]));

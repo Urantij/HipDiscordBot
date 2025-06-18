@@ -17,6 +17,7 @@ namespace HipDiscordBot.Utilities;
 [JsonSerializable(typeof(DiscordConfig))]
 [JsonSerializable(typeof(TwitchStatuserConfig))]
 [JsonSerializable(typeof(StreamAnnounceConfig))]
+[JsonSerializable(typeof(ScheduleEventCreatorConfig))]
 public partial class ConfigSerializerContext : JsonSerializerContext
 {
 }
@@ -32,6 +33,15 @@ public class CancerConfigLoader
         this._root = root;
     }
 
+    /// <summary>
+    /// Пытается достать конфиг из жсон файла.
+    /// Не забудь добавить этот конфиг в <see cref="ConfigSerializerContext"/>
+    /// </summary>
+    /// <param name="path"></param>
+    /// <param name="config"></param>
+    /// <typeparam name="TConfig"></typeparam>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
     public bool TryLoadConfig<TConfig>(string path, [MaybeNullWhen(false)] out TConfig config) where TConfig : class
     {
         JsonNode? targetNode = LocateNode(_root, path);

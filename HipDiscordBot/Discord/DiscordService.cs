@@ -18,7 +18,7 @@ public class DiscordService : IHostedService
     public DiscordService(IOptions<DiscordConfig> config, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(typeof(DiscordService));
-        
+
         _channelId = config.Value.ChannelId;
 
         WebProxy? proxy = null;

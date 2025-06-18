@@ -36,6 +36,14 @@ public class Program
                 builder.Services.AddHostedSingleton<ServicedHelixChecker, ITwitchChecker>();
             }
 
+            if (bind.TryLoadConfig<ScheduleEventCreatorConfig>("Discord/Schedule",
+                    out ScheduleEventCreatorConfig? scheduleEventCreatorConfig))
+            {
+                System.Console.WriteLine("счедуле");
+                builder.Services.AddCancerOptions<ScheduleEventCreatorConfig>(scheduleEventCreatorConfig);
+                builder.Services.AddHostedSingleton<ScheduleEventCreator>();
+            }
+
             builder.Services.AddSingleton<ServicedStatuser>();
             builder.Services.AddSingleton<TwitchStatuser>(sp => sp.GetRequiredService<ServicedStatuser>());
 

@@ -14,6 +14,8 @@ public class ScheduleEventCreatorConfig
 {
     public string Name { get; set; } = "СТРИМЧИК";
 
+    public string Location { get; set; } = "https://www.twitch.tv/hipstocrat";
+
     public string? Description { get; set; } = null;
 
     public string? ImagePath { get; set; } = null;
@@ -114,11 +116,13 @@ public class ScheduleEventCreator : IHostedService
                     guildChannel.GuildId,
                     new GuildScheduledEventProperties(_options.Value.Name,
                         GuildScheduledEventPrivacyLevel.GuildOnly,
-                        DateTimeOffset.UtcNow,
-                        GuildScheduledEventEntityType.StageInstance)
+                        DateTimeOffset.UtcNow + TimeSpan.FromMinutes(30),
+                        GuildScheduledEventEntityType.External)
                     {
                         Description = _options.Value.Description,
-                        Image = imageProperties
+                        Image = imageProperties,
+                        Metadata = new GuildScheduledEventMetadataProperties(_options.Value.Location),
+                        ScheduledEndTime = DateTimeOffset.UtcNow + TimeSpan.FromHours(12)
                     });
 
                 // не знаю надо локать или нет. о4 маловеройтно заролйет. а если обрабатывать, логики много надо
@@ -127,6 +131,8 @@ public class ScheduleEventCreator : IHostedService
                 await ev.ModifyAsync(a => a.Status = GuildScheduledEventStatus.Active);
 
                 // await File.WriteAllTextAsync(_options.Value.EventIdPath, ev.Id.ToString());
+
+                _logger.LogInformation("Отправили ивент.");
             }
             catch (Exception e)
             {
@@ -151,6 +157,8 @@ public class ScheduleEventCreator : IHostedService
 
                 // да да асинхронность без локов да да да
                 // File.Delete(_options.Value.EventIdPath);
+
+                _logger.LogInformation("Убили ивент.");
             }
             catch (Exception e)
             {

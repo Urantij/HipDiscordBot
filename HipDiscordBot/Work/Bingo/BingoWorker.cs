@@ -57,7 +57,7 @@ public class BingoWorker : IHostedService
             ApplicationCommand created = await _discordService.DiscordClient.Rest.CreateGlobalApplicationCommandAsync(
                 _discordService.DiscordClient.Id,
                 new SlashCommandProperties("addbingo", "создать кнопку бинго тут")
-                    .WithDefaultGuildUserPermissions(Permissions.Administrator));
+                    .WithDefaultGuildPermissions(Permissions.Administrator));
 
             _config.AddBingoCommandId = created.Id;
 

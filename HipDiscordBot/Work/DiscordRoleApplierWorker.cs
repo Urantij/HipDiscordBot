@@ -412,7 +412,7 @@ public class DiscordRoleApplierWorker : IHostedService
         ApplicationCommand interaction = await _discordService.DiscordClient.Rest.CreateGlobalApplicationCommandAsync(
             _discordService.App.Id,
             new SlashCommandProperties("roling", "чек роли")
-                .WithDefaultGuildUserPermissions(Permissions.Administrator)
+                .WithDefaultGuildPermissions(Permissions.Administrator)
                 .WithOptions([
                     new ApplicationCommandOptionProperties(ApplicationCommandOptionType.Role, "role", "роль"),
                     new ApplicationCommandOptionProperties(ApplicationCommandOptionType.String, "text", "залупа")
@@ -445,7 +445,7 @@ public class DiscordRoleApplierWorker : IHostedService
         ApplicationCommand created = await _discordService.DiscordClient.Rest.CreateGlobalApplicationCommandAsync(
             _discordService.App.Id,
             new SlashCommandProperties("here", "насри тут, дружище")
-                .WithDefaultGuildUserPermissions(Permissions.Administrator));
+                .WithDefaultGuildPermissions(Permissions.Administrator));
 
         _config.CreateInteractionId = created.Id;
 

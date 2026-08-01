@@ -63,7 +63,7 @@ public class DiscordService : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        return DiscordClient.CloseAsync(cancellationToken: cancellationToken);
+        return DiscordClient.CloseAsync(cancellationToken: cancellationToken).AsTask();
     }
 
     public Task SendMessageAsync(string text)
